@@ -1,0 +1,40 @@
+
+#library(foreign)
+#library(plm)
+#library(wooldridge)
+#library(dplyr)
+package_list<- c("foreign", "plm", "wooldridge", "dplyr")
+lapply(package_list, require, character.only = TRUE)
+
+# Exemplo MQO agrupado
+fert = read.dta("http://fmwww.bc.edu/ec-p/data/wooldridge/fertil1.dta")
+head(fert)
+
+reg2 = lm(kids~educ+age+agesq+black+east+northcen+west+farm+othrural+
+            town+smcity+y74+y76+y78+y80+y82+y84, data=fert)
+summary(reg2)
+
+# Exemplo Efeitos Fixos
+
+# Baixando dados "wagepan" (painel em salários)
+data("wagepan")
+
+head(wagepan)
+
+# Convertendo p/ formato em painel (index = i e t)
+wagepan_p <- pdata.frame(wagepan, index = c("nr", "year"))
+str(wagepan_p)
+
+# Modelo de efeitos fixos dentro do estimador
+fe_model <- plm(lwage ~ educ + exper + I(exper^2), 
+                data = wagepan_p, 
+                model = "within")
+
+
+
+# sumário c/ cluster
+summary(fe_model, vcov = vcovHC, type = "HC1")
+
+# verificando a variação em educ por individuo
+
+wagepan %>% group_by(nr) %>% summarise(sd_educ = sd(educ)) %>% filter(sd_educ > 0)
