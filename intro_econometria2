@@ -1,0 +1,43 @@
+# Aula 4
+
+data("wage1", package = "wooldridge")   # load data
+# uma função que retorna um gráfico
+plotfun <- function(wage1,log=FALSE,rug = TRUE){
+  y = wage1$wage
+  if (log){
+    y = log(wage1$wage)
+  }
+  plot(y = y,
+       x = wage1$educ, 
+       col = "maroon", pch = 21, bg = "grey",     
+       cex=1.25, xaxt="n", frame = FALSE,      
+       main = ifelse(log,"log(Salários) vs. Edu, 1976","Salários vs. Educa, 1976"),
+       xlab = "Anos de Estudo", 
+       ylab = ifelse(log,"Log Salários por hora","Salários por hora"))
+  axis(side = 1, at = c(0,6,12,18))         
+  if (rug) rug(wage1$wage, side=2, col="maroon")        
+}
+
+par(mfcol = c(2,1))  #
+# plot 1: gráfico de disperção
+plotfun(wage1)
+
+# plot 2: histograma + densidade
+hist(wage1$wage,prob = TRUE, col = "grey", border = "maroon", 
+     main = "Histo de Sal e Densidade",xlab = "Sal. por hora")
+lines(density(wage1$wage), col = "black", lw = 2)
+
+hourly_wage <- lm(formula = wage ~ educ, data = wage1)
+plotfun(wage1)
+abline(hourly_wage, col = 'black', lw = 2)  # ajustando uma linha
+
+summary(hourly_wage)
+
+cmat = round(cor(subset(wage1,select = c(lwage,educ,exper,tenure))),2) # matriz de correlação
+cmat
+corrplot::corrplot(cmat,type = "upper",method = "shade")
+
+educ_only <- lm(lwage ~ educ, data = wage1)
+educ_exper <- lm(lwage ~ educ + exper, data = wage1)
+log_wages <- lm(lwage ~ educ + exper + tenure, data = wage1)
+stargazer::stargazer(educ_only, educ_exper, log_wages,type = if (knitr:::is_latex_output()) "latex" else "html")
