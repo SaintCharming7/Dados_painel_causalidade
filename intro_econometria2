@@ -1,3 +1,6 @@
+package_list<- c("foreign", "plm", "wooldridge", "dplyr", "ggplot2","corrplot", 
+                 "stargazer", "broom", "dplyr", "purrr", "sandwich", "lmtest", "quantmod")
+lapply(package_list, require, character.only = TRUE)
 # Aula 4
 
 data("wage1", package = "wooldridge")   # load data
@@ -41,3 +44,49 @@ educ_only <- lm(lwage ~ educ, data = wage1)
 educ_exper <- lm(lwage ~ educ + exper, data = wage1)
 log_wages <- lm(lwage ~ educ + exper + tenure, data = wage1)
 stargazer::stargazer(educ_only, educ_exper, log_wages,type = if (knitr:::is_latex_output()) "latex" else "html")
+
+# aula 4
+
+# Configurar semente para reprodutibilidade
+set.seed(123)
+
+# Simular dados heterocedásticos (volatilidade crescente)
+n <- 100  # Número de observações
+tempo <- 1:n
+retorno <- 0.5 + 0.1 * tempo + rnorm(n, mean = 0, sd = 0.5 * tempo)  # Variância aumenta com o tempo
+plot(retorno)
+# Criar dataframe
+dados <- data.frame(tempo, retorno)
+
+# Visualizar
+ggplot(dados, aes(x = tempo, y = retorno)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "maroon") +
+  labs(title = "Retorno vs. Tempo (Heterocedasticidade Crescente)",
+       x = "Tempo", y = "Retorno") +
+  theme_minimal()
+
+# Ajustar modelo OLS
+modelo <- lm(retorno ~ tempo, data = dados)
+summary(modelo)
+
+# --- Testes de Heterocedasticidade ---
+
+# 1. Teste de Breusch-Pagan (lmtest)
+bp_test <- bptest(modelo)
+print(bp_test)  # p-valor < 0.05 indica heterocedasticidade
+
+# 2. Teste de White (versão alternativa)
+white_test <- bptest(modelo, ~ tempo + I(tempo^2), data = dados)
+print(white_test)
+
+# 3. Gráfico de resíduos vs. ajustados
+plot(modelo, which = 1)  # Padrão de "funil" indica heterocedasticidade
+
+# Get historical stock prices
+symbol <- "AAPL"  # You can change this to any stock symbol
+getSymbols(symbol, src = "yahoo", from = "2020-01-01", to = "2025-01-01")
+
+# Extract adjusted closing prices
+stock_data <- get(symbol)
+stock_data <- na.omit(stock_data[, "AAPL.Close"])  # Remove missing values
