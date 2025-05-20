@@ -1,0 +1,104 @@
+package_list<- c("foreign", "plm", "wooldridge", "dplyr", "ggplot2","corrplot", 
+                 "stargazer", "broom", "dplyr", "purrr", "sandwich", "lmtest", "quantmod", 
+                 "AER", "ivreg", "estimatr")
+lapply(package_list, require, character.only = TRUE)
+
+# aula 4
+
+# Configurar semente para reprodutibilidade
+set.seed(123)
+
+# Simular dados heterocedásticos (volatilidade crescente)
+n <- 100  # Número de observações
+tempo <- 1:n
+retorno <- 0.5 + 0.1 * tempo + rnorm(n, mean = 0, sd = 0.5 * tempo)  # Variância aumenta com o tempo
+plot(retorno)
+# Criar dataframe
+dados <- data.frame(tempo, retorno)
+
+# Visualizar
+ggplot(dados, aes(x = tempo, y = retorno)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "maroon") +
+  labs(title = "Retorno vs. Tempo (Heterocedasticidade Crescente)",
+       x = "Tempo", y = "Retorno") +
+  theme_minimal()
+
+# Ajustar modelo OLS
+modelo <- lm(retorno ~ tempo, data = dados)
+summary(modelo)
+
+# --- Testes de Heterocedasticidade ---
+
+# 1. Teste de Breusch-Pagan (lmtest)
+bp_test <- bptest(modelo)
+print(bp_test)  # p-valor < 0.05 indica heterocedasticidade
+
+# 2. Teste de White (versão alternativa)
+white_test <- bptest(modelo, ~ tempo + I(tempo^2), data = dados)
+print(white_test)
+
+# 3. Gráfico de resíduos vs. ajustados
+plot(modelo, which = 1)  # Padrão de "funil" indica heterocedasticidade
+
+# Get historical stock prices
+symbol <- "AAPL"  # You can change this to any stock symbol
+getSymbols(symbol, src = "yahoo", from = "2020-01-01", to = "2025-01-01")
+
+# Extract adjusted closing prices
+stock_data <- get(symbol)
+stock_data <- na.omit(stock_data[, "AAPL.Close"])  # Remove missing values
+
+# Create returns
+stock_returns <- dailyReturn(stock_data)
+plot(stock_returns)
+scatter.smooth(stock_data)
+# Fit a linear model
+model <- lm(stock_returns ~ time(stock_returns))
+
+# Perform the Breusch-Pagan test
+bp_test <- bptest(model)
+
+# Display test results
+print(bp_test)
+
+# Vas Dummy e categóricas
+data("mtcars")
+head(mtcars)
+# Criar variável categórica "gênero" (0 = Homem, 1 = Mulher)
+mtcars$genero <- factor(mtcars$vs, levels = c(0, 1), labels = c("Homem", "Mulher"))
+
+# Ver as primeiras linhas
+head(mtcars[c("mpg", "wt", "genero")])
+
+# Média de mpg (milhas por galão) por gênero
+aggregate(mpg ~ genero, data = mtcars, mean)
+
+# Modelo com intercepto (default)
+modelo <- lm(mpg ~ wt + genero, data = mtcars)
+summary(modelo)
+
+modelo_sem_intercepto <- lm(mpg ~ wt + genero - 1, data = mtcars)
+summary(modelo_sem_intercepto)
+
+stargazer::stargazer(modelo, modelo_sem_intercepto,type = if (knitr:::is_latex_output()) "latex" else "text")
+
+cmat = round(cor(subset(mtcars,select = c(mpg, wt, vs))),2) # matriz de correlação
+cmat
+corrplot::corrplot(cmat,type = "upper",method = "number")
+head(mtcars)
+
+ggplot(mtcars, aes(x = wt, y = mpg, color = genero)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Relação entre peso, gênero e consumo",
+       x = "Peso (1000 lbs)", y = "Milhas por galão")+theme_classic()
+
+# verificando com logSal
+# dessa vez c/ f
+
+data("wage1", package = "wooldridge")
+wage1$female = as.factor(wage1$female)  # convertendo p /fator 0-1 
+lm_w = lm(lwage ~ educ, data = wage1)
+lm_w_sex = lm(lwage ~ educ + female, data = wage1)
+stargazer::stargazer(lm_w,lm_w_sex,type = if (knitr:::is_latex_output()) "latex" else "text")
