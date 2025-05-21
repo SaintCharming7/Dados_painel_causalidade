@@ -1,0 +1,66 @@
+package_list<- c("foreign", "plm", "wooldridge", "dplyr", "ggplot2","corrplot", 
+                 "stargazer", "broom", "dplyr", "purrr", "sandwich", "lmtest", "quantmod", 
+                 "AER", "ivreg", "estimatr")
+lapply(package_list, require, character.only = TRUE)
+
+# Variáveis Instrumentais
+
+mroz <- read.dta("http://fmwww.bc.edu/ec-p/data/wooldridge/mroz.dta")
+head(mroz)
+
+# restringgindo para observações em NA
+oursample <- subset(mroz, !is.na(wage))
+
+# MQO parametro do coef. angular (manual)
+with(oursample, cov(log(wage), educ)/var(educ))
+
+# paramentro coef. angular VI manual
+with(oursample, cov(log(wage), fatheduc)/ cov(educ,fatheduc))
+
+# MQO auto
+reg.mqo <- lm(log(wage)~ educ, data = oursample)
+summary(reg.mqo)
+# VI automático
+
+reg.vi <- ivreg(log(wage)~ educ|fatheduc, data= oursample)
+summary(reg.vi)
+# tabela de regressão
+stargazer(reg.mqo, reg.vi, type = "text")
+
+# 2sls
+
+# 1o estágio
+
+stage1 <- lm(educ~exper+I(exper^2)+motheduc+fatheduc, data = oursample)
+
+# 2o estágio
+
+man.2sls <- lm(log(wage)~fitted(stage1)+exper+I(exper^2), data = oursample)
+
+# tabela
+
+stargazer(stage1, man.2sls, type= "html", keep.stat=c("n","rsq"))
+
+# exogeneidade
+
+#1o estágio
+est.1 <- lm(educ~exper+I(exper^2)+motheduc+fatheduc, data = oursample)
+
+#2o estágio
+est.2 <- lm(log(wage)~educ+exper+I(exper^2)+resid(est.1), data = oursample)
+
+#resultados incluíndo o teste t
+coeftest(est.2)
+
+# VI c/ painel
+
+jtrain <- read.dta("http://fmwww.bc.edu/ec-p/data/wooldridge/jtrain.dta")
+
+# definindo o painel (1987 e 1988 apenas)
+jtrain.87.88 <- subset(jtrain, year<=1988)
+head(jtrain.87.88)
+jtrain.p <- pdata.frame(jtrain.87.88, index = c("fcode", "year"))
+head(jtrain.p)
+# regressão VI
+
+summary(plm(log(scrap)~ hrsemp| grant, model = "fd", data = jtrain.p))
