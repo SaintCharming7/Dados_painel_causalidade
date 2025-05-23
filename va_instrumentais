@@ -64,3 +64,20 @@ head(jtrain.p)
 # regressão VI
 
 summary(plm(log(scrap)~ hrsemp| grant, model = "fd", data = jtrain.p))
+
+#VIF
+
+# Calcular VIF (valores)
+vif_values <- vif(stage1)
+
+# gráfico de barras
+barplot(vif_values, 
+        main = "Variance Inflation Factor (VIF) Plot", 
+        ylab = "VIF Value", 
+        col = "skyblue", 
+        las = 2, 
+        border = "black")
+
+# linha de avaliação (e.g., VIF = 5)
+abline(h = 5, col = "maroon", lty = 2)
+# se VIF > 5 indica que as variáveis apresentam forte colinearidade
