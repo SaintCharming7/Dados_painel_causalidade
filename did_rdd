@@ -1,0 +1,148 @@
+package_list<- c("foreign", "plm", "wooldridge", "dplyr", "ggplot2","corrplot", 
+                 "stargazer", "broom", "dplyr", "purrr", "sandwich", "lmtest", "quantmod", 
+                 "AER", "ivreg", "estimatr", "car", "fixest", "haven", "tidyverse", 
+                 "kableExtra", "readr", "modelsummary", "rdd","rdrobust")
+lapply(package_list, require, character.only = TRUE)
+
+# Diff Diff
+# Set seed para simulação
+set.seed(123)
+
+# Parâmetros de Simulação
+n_fastfood_chains <- 400 # Número de restaurantes fast-food (200 NJ, 200 PA)
+baseline_employment <- 20 # Média emprego antes da mudança de política
+treatment_effect <- -0.5 # Pequeno efeito negativo (Card & Krueger encontraram ~0)
+time_trend <- 0.8 # tendência de tempo afetando ambos estados
+nj_effect <- 1.5 # NJ geralmente têm um taxa de emprego maior
+pa_effect <- 0 # Pennsylvania baseline
+
+# dataset - versão fixa
+df <- tibble(
+  # Restaurant ID (antes e depois)
+  id = rep(1:n_fastfood_chains, each = 2),
+  # indicator estado (constante dentro de cada restaurante)
+  state = rep(rep(c("New Jersey", "Pennsylvania"), each = n_fastfood_chains/2), each = 2),
+  # indicator de tempo (alterna entre 0 e 1 para cada restaurante)
+  time = rep(c(0, 1), times = n_fastfood_chains)
+) %>%
+  # adicionando dados de emprego como ruído brancos
+  mutate(
+    employment = baseline_employment +
+      ifelse(state == "New Jersey", nj_effect, pa_effect) +
+      time * time_trend +
+      ifelse(state == "New Jersey" & time == 1, treatment_effect, 0) +
+      rnorm(n(), mean = 0, sd = 2) # Random noise
+  )
+
+# Verificando a estrutura
+head(df, 10) 
+
+# 2. Diff-Diff análise
+# Fazendo NJ como referência
+df$state <- relevel(factor(df$state), ref = "Pennsylvania")
+
+# regressão
+did_model <- feols(employment ~ state*time, data = df)
+summary(did_model)
+
+
+# Calculando a média e intervalos de confiança
+means <- df %>%
+  group_by(state, time) %>%
+  summarize(
+    mean = mean(employment),
+    se = sd(employment)/sqrt(n()),
+    ci_lower = mean - 1.96*se,
+    ci_upper = mean + 1.96*se
+  )
+
+# gráfico
+
+##
+ggplot(means, aes(x = factor(time, labels = c("Fevereiro 1992 (Antes)", "Nov 1992 (Depois)")), 
+                  y = mean, color = state)) +
+  geom_point(position = position_dodge(width = 0.2), size = 3) +
+  geom_line(aes(group = state), position = position_dodge(width = 0.2), size = 1) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), 
+                width = 0.1, position = position_dodge(width = 0.2)) +
+  
+  # Correct DiD annotation
+  annotate("segment", 
+           x = 1.8, xend = 1.8,
+           y = means$mean[means$state=="Pennsylvania" & means$time==1],
+           yend = means$mean[means$state=="Pennsylvania" & means$time==1] - 0.247,
+           color = "red", arrow = arrow(length = unit(0.2, "cm"))) +
+  
+  scale_y_continuous(limits = c(19, 22.5), breaks = seq(19, 22, 0.5)) +
+  scale_color_manual(values = c("New Jersey" = "#E69F00", "Pennsylvania" = "#56B4E9")) +
+  labs(title = "Tendências de Emprego em Cadeias de Fast Food",
+       subtitle = "NJ vs Pennsylvania antes/depois aumento do salário minímo",
+       x = "",
+       y = "Média Equivalente Empregos Full-Time",
+       color = "Estado",
+       caption = "Barras de erro mostram intervalos de confiança de 95%\nDados simulados replicando Card & Krueger (1994)") +
+  theme_classic()
+
+
+# RDD
+
+set.seed(123) #  reproduzir simulações
+n <- 1000     # Número de estudantes
+
+# Simulando (variável de execução)
+dfr <- data.frame(
+  test_score = rnorm(n, mean = 70, sd = 15) %>% pmax(0) %>% pmin(100)
+)
+
+# tratamento (D = 1 if test_score ≥ 80) 
+dfr$scholarship <- ifelse(dfr$test_score >= 80, 1, 0)
+
+# Simulando remuneração (Y = 20 + 5*scholarship + noise) 
+dfr$earnings <- 20 + 5*dfr$scholarship + rnorm(n, sd = 10)
+
+head(dfr)
+
+ggplot(dfr, aes(x = test_score, y = earnings, color = factor(scholarship))) +
+  geom_point(alpha = 0.5) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "purple4") +
+  labs(title = "Sharp RDD: Renda Discontínua Sobre a Nota = 80",
+       x = "Nota", y = "Renda ($1000s)") +
+  theme_classic()
+
+# restringíndo e criando uma nota de corte (e.g., ±10 )
+dfr_rd <- dfr %>% filter(test_score >= 70 & test_score <= 90)
+summary(dfr_rd)
+# Regressão Linear Simples
+model_linear <- lm(earnings ~ scholarship + test_score, data = dfr_rd)
+summary(model_linear)
+
+rdrobust(y = dfr$earnings, x = dfr$test_score, c = 80) %>% summary()
+
+# fuzzy
+
+# Adicionando conformidade imperfeita
+dfr$scholarship_offered <- ifelse(dfr$test_score >= 80, 1, 0)
+dfr$scholarship_taken <- ifelse(
+  dfr$scholarship_offered == 1, 
+  rbinom(n, 1, 0.8),  # 80% aceitam se oferecido
+  rbinom(n, 1, 0.1)   # 10% aceitam se não oferecido
+)
+
+# Update renda (true effect = 5)
+dfr$earnings_fuzzy <- 20 + 5*dfr$scholarship_taken + rnorm(n, sd = 10)
+
+# Instrumento
+iv_model <- ivreg(
+  earnings_fuzzy ~ scholarship_taken + test_score | 
+    scholarship_offered + test_score,
+  data = dfr %>% filter(test_score >= 70 & test_score <= 90))
+  summary(iv_model)
+
+  # Teste McCrary   
+  
+  DCdensity(dfr$test_score, cutpoint = 80)
+
+  # Sensitividade
+  
+  rdplot(y = dfr$earnings, x = dfr$test_score, c = 80, binselect = "es") 
+  
