@@ -1,0 +1,170 @@
+package_list<- c("foreign", "plm", "wooldridge", "dplyr", "ggplot2","corrplot", 
+                 "stargazer", "broom", "dplyr", "purrr", "sandwich", "lmtest", "quantmod", 
+                 "AER", "ivreg", "estimatr", "car", "fixest", "haven", "tidyverse", 
+                 "kableExtra", "readr", "modelsummary", "rdd","rdrobust", "MatchIt", "WDI", 
+                 "fredr", "forecast", "xts", "tseries")
+lapply(package_list, require, character.only = TRUE)
+
+## intro séries temporais
+
+## crescimento real do PIB EUA (trimestre) 
+getSymbols('GDPC1',src='FRED')
+
+# convertendo o PIB em vetor
+gdp_data <- data.frame(date=index(GDPC1), GDP=coredata(GDPC1))
+
+# gráfico utilizando o ggplot
+eua_real <- ggplot(gdp_data, aes(x=date, y=GDPC1)) +
+  geom_line(color = "navyblue") +
+  labs(title= "PIB Real EUA", x="Ano", y="em US$ Bi")+theme_classic()
+eua_real
+
+
+pib_cres_eua <- WDI(country = "US", indicator = "NY.GDP.MKTP.KD.ZG", start = 1960, end = 2024)
+str(pib_cres_eua)
+
+# Filter data for the United States
+pib_cres_eua <- subset(pib_cres_eua, country == "United States")
+
+# Plot GDP growth time series
+ggplot(pib_cres_eua, aes(x=year, y=NY.GDP.MKTP.KD.ZG)) +
+  geom_line(color = "navyblue") +
+  labs(title="Taxa de crescimento EUA", x="Ano", y=" Crescimento em %")+theme_classic()
+
+#library(quantmod) #biblio p/ baixar os dados do yahoo finance
+#library(xts)
+
+getSymbols("^NYA", src = "yahoo", from = "2013-01-01", to = "2024-12-31") #baixando os dados da NYSE entre 2013-2023
+
+#calculando os retornos
+?dailyReturn
+returns <- dailyReturn(NYA)
+str(returns)
+# convertendo em um data-frame
+ret_df <- as.data.frame(returns)
+ret_df <- data.frame(Date = index(returns), Returns = coredata(returns))
+str(ret_df)
+# Create the ggplot graph
+ggplot(ret_df, aes(x = Date, y = daily.returns)) +
+  geom_line(color = "royalblue") +
+  labs(title = "Retornos Diários NYSE (2013-2024)",
+       x = "",
+       y = "Retornos")+theme_classic()
+
+acf(na.omit(ret_df), main = " Autocorrelação amostral NYSE")
+
+# RBG
+
+set.seed(123)
+y = rnorm(250)
+
+ts.plot(y,main="Processo RBG",xlab="time",
+        ylab="y(t)", col="blue", lwd=2)
+abline(h=0)
+
+# PD
+
+set.seed(123)
+e = rnorm(250)
+y.dt = 0.1*seq(1,250) + e
+ts.plot(y.dt, lwd=2, col="blue", main="PD c/ Ruído")
+abline(a=0, b=0.1)
+
+#PA
+# Simulação de 4 PAs diferentes começando em 0 (em um modelo AR)
+set.seed(1)
+
+PAs <- ts(replicate(n=4,
+                    arima.sim(model = list(order = c(0, 1 ,0)), n = 100)))
+matplot(PAs, 
+        type = "l", 
+        col = c("royalblue", "darkgreen", "darkred", "orange"), 
+        lty = 1, 
+        lwd = 2,
+        main = "",
+        xlab = "Tempo",
+        ylab = "Valor")
+
+# PA flutuação
+
+set.seed(1)
+
+PAsd <- ts(replicate(n = 4, 
+                     arima.sim(model = list(order = c(0, 1, 0)), 
+                               n = 100,
+                               mean = -0.2)))
+matplot(PAsd, 
+        type = "l", 
+        col = c("royalblue", "darkgreen", "darkred", "orange"), 
+        lty = 1, 
+        lwd = 2,
+        main = "",
+        xlab = "Tempo",
+        ylab = "Valor")
+
+
+
+
+# Série temporal mais complexa
+
+#importando dados da biblioteca FRED
+# Taxa de câmbio USD vs Libra Esterlina (GB)
+
+getSymbols('DEXUSUK', src = 'FRED')
+
+# convertendo a taxa de câmbio em vetor
+usd_ukp <- data.frame(date=index(DEXUSUK), GDP=coredata(DEXUSUK))
+plot(usd_ukp, main = "", type = "l")
+str(usd_ukp)
+
+usd_ukp$DEXUSUK <- as.numeric(usd_ukp$DEXUSUK)
+usd_ukp_diff <- diff(usd_ukp$DEXUSUK)
+str(usd_ukp_diff)
+plot(usd_ukp_diff, main = "", type = "l", col = "purple4")
+
+
+# removendo as NAs
+usd_ukp_diff_clean <- na.omit(usd_ukp_diff)
+str(usd_ukp_diff_clean)
+plot(usd_ukp_diff_clean, main = "", type = "l", col = "purple4")
+
+adf.test(usd_ukp_diff_clean)
+str(usd_ukp_diff)
+
+# convertendo o PIB em vetor
+
+getSymbols('GDPC1',src='FRED')
+gdp_data <- data.frame(date=index(GDPC1), GDP=coredata(GDPC1))
+str(gdp_data)
+
+# Convertendo a variavel "date" p/ um série temporal
+gdp_ts <- ts(gdp_data$GDPC1, start = c(1947, 1), frequency = 4)
+
+plot(gdp_data, type = "l", col = "green4")
+
+
+# estimando o modelo
+ar.ols(gdp_ts, 
+       order.max = 1, 
+       demean = F, 
+       intercept = T)
+
+
+ar_ols <- ar.ols(gdp_ts, order.max = 1, demean = FALSE, intercept = TRUE)
+str(ar_ols)
+
+gdp_ts <- data.frame(gdp_ts)
+str(gdp_ts)
+
+# construíndo as defasagens 
+gdp_ts$lag_GDPC1 <- stats::lag(gdp_ts$gdp_ts)
+head(gdp_ts)
+
+# Construindo a formula
+#criando as defasagens
+formula <- gdp_ts ~ lag_GDPC1
+
+# Criando o AR como função linear ou seja como regressão linear
+ar_lm <- lm(formula, data = gdp_ts)
+
+summary(ar_lm)
