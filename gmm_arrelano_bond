@@ -1,0 +1,39 @@
+package_list<- c("foreign", "plm", "wooldridge", "dplyr", "ggplot2","corrplot", 
+                 "stargazer", "broom", "dplyr", "purrr", "sandwich", "lmtest", "quantmod", 
+                 "AER", "ivreg", "estimatr", "car", "fixest", "haven", "tidyverse", 
+                 "kableExtra", "readr", "modelsummary", "rdd","rdrobust", "MatchIt", "WDI", 
+                 "fredr", "forecast", "xts", "tseries")
+lapply(package_list, require, character.only = TRUE)
+
+# Arellano-Bond (1991): Paíneis Dinâmicos
+data("Grunfeld", package = "AER")
+head(Grunfeld)
+
+# Visualizar estrutura dos dados
+str(Grunfeld)
+
+# Estimação Arellano-Bond (GMM em Diferenças)
+# Converter dados para formato de painel
+pGrunfeld <- pdata.frame(Grunfeld, index = c("firm", "year"))
+
+# Estimação Arellano-Bond (GMM em diferenças)
+ab_model <- pgmm(
+  invest ~ lag(invest, 1) + value | lag(invest, 2:99),  # Fórmula + instrumentos (defasagens de t-2 em diante)
+  data = pGrunfeld,
+  effect = "individual",  # Efeitos individuais (η_i)
+  model = "twosteps",     # GMM em dois passos (mais eficiente)
+  transformation = "d"    # Transformação em diferenças
+)
+
+# Resumo dos resultados
+summary(ab_model)
+
+# Pooled OLS (enviesado p/ cima)
+
+pooled <- plm(invest ~ lag(invest, 1) + value, data = pGrunfeld, model = "pooling")
+
+# Within groups (Efeitos Fixos)
+
+fe <- plm(invest ~ lag(invest, 1) + value, data = pGrunfeld, model = "within")
+
+stargazer(pooled, fe, ab_model, type = "text", title = "Comparação de Estimadores")
